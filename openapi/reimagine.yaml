@@ -1,0 +1,178 @@
+openapi: 3.1.0
+info:
+  title: Reimagine Image Edit API
+  version: 1.0.0
+  summary: Async image-edit jobs with provider-agnostic interface.
+servers:
+  - url: https://api.ftyadu.in
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    CreateEditJobRequest:
+      type: object
+      required:
+        - prompt
+      properties:
+        prompt:
+          type: string
+          minLength: 3
+        init_image_url:
+          type: string
+          format: uri
+        init_image_b64:
+          type: string
+          description: Base64 without data URL prefix
+        mask_url:
+          type: string
+          format: uri
+        mask_b64:
+          type: string
+        strength:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 0.7
+        guidance:
+          type: number
+          minimum: 0
+          maximum: 20
+          default: 7.5
+        seed:
+          type: integer
+          minimum: 0
+        size:
+          type: string
+          enum:
+            - 1024x1024
+            - 1024x1792
+            - 1792x1024
+          default: 1024x1024
+        output_format:
+          type: string
+          enum:
+            - png
+            - jpeg
+            - webp
+          default: png
+        n:
+          type: integer
+          minimum: 1
+          maximum: 4
+          default: 1
+        provider_hint:
+          type: string
+          enum:
+            - openai
+            - gemini
+            - seedream
+        webhook_url:
+          type: string
+          format: uri
+        idempotency_key:
+          type: string
+          maxLength: 64
+        metadata:
+          type: object
+          additionalProperties: true
+
+    EditJob:
+      type: object
+      properties:
+        job_id:
+          type: string
+        status:
+          type: string
+          enum:
+            - queued
+            - running
+            - succeeded
+            - failed
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        error:
+          type: string
+          nullable: true
+        outputs:
+          type: array
+          items:
+            type: object
+            properties:
+              url:
+                type: string
+                format: uri
+              mime:
+                type: string
+              sha256:
+                type: string
+              width:
+                type: integer
+              height:
+                type: integer
+
+paths:
+  /v1/images/edits:
+    post:
+      operationId: createImageEditJob
+      summary: Create async image-edit job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEditJobRequest'
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+                  status:
+                    type: string
+                  poll_url:
+                    type: string
+                    format: uri
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '409':
+          description: Conflict (idempotency)
+
+  /v1/images/edits/{job_id}:
+    get:
+      operationId: getImageEditJob
+      summary: Get job status and result
+      parameters:
+        - in: path
+          name: job_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EditJob'
+        '404':
+          description: Not Found

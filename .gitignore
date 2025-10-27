@@ -1,0 +1,27 @@
+# macOS
+.DS_Store
+
+# SwiftPM
+.build/
+.swiftpm/xcode/package.xcworkspace/
+
+# Xcode
+DerivedData/
+*.xcworkspace
+*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Node
+node_modules/
+server/dist/
+
+# Logs
+*.log
+
+# Env
+.env
+.env.*
+server/.env.local
+ios/.env
+
+# Artifacts
+tmp/
