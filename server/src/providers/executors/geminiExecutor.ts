@@ -6,7 +6,7 @@ import { metrics } from '@lib/metrics';
 import { ProviderConfig } from '@lib/remoteConfig';
 import { ImageEditRequest, ImageEditResult } from '@providers/types';
 
-import { loadImageBuffer, toDataUrl, requireEnv, computeSha256 } from './helpers';
+import { buildStubResult, loadImageBuffer, toDataUrl, requireEnv, computeSha256 } from './helpers';
 import { downloadToBuffer } from '@util/http';
 import { storeOutputs, OutputBuffer } from '@util/storeOutputs';
 
@@ -30,6 +30,14 @@ export const handleGeminiEdit = async (
   config: ProviderConfig
 ): Promise<ImageEditResult> => {
   metrics.record('provider.gemini.invoke', 1, { hasImage: String(Boolean(request.baseImage)) });
+
+  if (process.env.PROVIDER_STUBS === 'true') {
+    return buildStubResult('gemini', request, {
+      providerMeta: {
+        stub: true
+      }
+    });
+  }
 
   const apiKey = requireEnv('GEMINI_API_KEY');
   const modelId = config.modelId || DEFAULT_MODEL;

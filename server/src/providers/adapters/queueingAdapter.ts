@@ -47,7 +47,10 @@ export class QueueingProviderAdapter implements ProviderAdapter {
       jobId: jobRow.id,
       provider: this.name,
       request,
-      config: this.config
+      config: this.config,
+      webhookUrl: jobRow.webhook_url,
+      enqueuedAt: Date.now(),
+      attempt: 0
     });
 
     return {

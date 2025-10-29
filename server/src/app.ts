@@ -10,6 +10,7 @@ import { trendsRouter } from '@routes/trends';
 import { providersRouter } from '@routes/providers';
 import { runtimeConfig } from '@config/env';
 import { imageEditsRouter } from '@routes/imageEdits';
+import { metrics } from '@lib/metrics';
 
 export const createApp = () => {
   const app = express();
@@ -22,6 +23,13 @@ export const createApp = () => {
   app.use(express.json({ limit: '10mb' }));
 
   app.get('/healthz', (_req, res) => res.json({ ok: true }));
+  if (metrics.isEnabled()) {
+    app.get('/metrics', async (_req, res) => {
+      const body = await metrics.export();
+      res.setHeader('Content-Type', metrics.contentType);
+      res.send(body);
+    });
+  }
 
   app.use('/v1/edits', editsRouter);
   app.use('/v1/jobs', jobsRouter);
