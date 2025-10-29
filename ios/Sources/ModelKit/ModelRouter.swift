@@ -37,15 +37,40 @@ public enum JobStatus: String, Codable {
     case failed
 }
 
-public struct ProviderOutput: Equatable {
-    public let previews: [URL]
-    public let outputs: [URL]
-    public let status: JobStatus
+public struct ProviderAsset: Identifiable, Equatable {
+    public let id: UUID
+    public let url: URL
+    public let mimeType: String
+    public let sha256: String?
+    public let width: Int?
+    public let height: Int?
 
-    public init(previews: [URL], outputs: [URL], status: JobStatus) {
-        self.previews = previews
+    public init(
+        id: UUID = UUID(),
+        url: URL,
+        mimeType: String,
+        sha256: String?,
+        width: Int?,
+        height: Int?
+    ) {
+        self.id = id
+        self.url = url
+        self.mimeType = mimeType
+        self.sha256 = sha256
+        self.width = width
+        self.height = height
+    }
+}
+
+public struct ProviderOutput: Equatable {
+    public let outputs: [ProviderAsset]
+    public let status: JobStatus
+    public let errorMessage: String?
+
+    public init(outputs: [ProviderAsset], status: JobStatus, errorMessage: String? = nil) {
         self.outputs = outputs
         self.status = status
+        self.errorMessage = errorMessage
     }
 }
 
@@ -89,6 +114,8 @@ public final class ModelRouter: ObservableObject {
     private let client: GatewayClient
     @Published public private(set) var pendingJobs: [PendingJob] = []
     @Published public private(set) var providers: [ProviderDescriptor] = []
+    @Published public private(set) var lastError: GatewayError?
+    @Published public private(set) var isLoadingProviders = false
     private var outputs: [String: ProviderOutput] = [:]
     private var pollingTask: Task<Void, Never>?
 
@@ -106,10 +133,24 @@ public final class ModelRouter: ObservableObject {
         prompt: String,
         payload: Data
     ) async throws {
-        let jobId = try await client.enqueueEdit(provider: provider, payload: payload)
-        let job = PendingJob(id: jobId, provider: provider, imageHash: imageHash, prompt: prompt)
-        await MainActor.run {
-            pendingJobs.append(job)
+        do {
+            let jobId = try await client.enqueueEdit(provider: provider, payload: payload)
+            let job = PendingJob(id: jobId, provider: provider, imageHash: imageHash, prompt: prompt)
+            await MainActor.run {
+                pendingJobs.append(job)
+                lastError = nil
+            }
+        } catch let error as GatewayError {
+            await MainActor.run {
+                lastError = error
+            }
+            throw error
+        } catch {
+            let gatewayError = GatewayError.message(error.localizedDescription)
+            await MainActor.run {
+                lastError = gatewayError
+            }
+            throw gatewayError
         }
     }
 
@@ -120,10 +161,19 @@ public final class ModelRouter: ObservableObject {
             outputs[cacheKey(for: jobId, provider: provider)] = output
             await MainActor.run {
                 pendingJobs[index].status = output.status
+                if let errorMessage = output.errorMessage, !errorMessage.isEmpty {
+                    lastError = GatewayError.message(errorMessage)
+                }
+            }
+        } catch let error as GatewayError {
+            await MainActor.run {
+                pendingJobs[index].status = .failed
+                lastError = error
             }
         } catch {
             await MainActor.run {
                 pendingJobs[index].status = .failed
+                lastError = GatewayError.message(error.localizedDescription)
             }
         }
     }
@@ -133,13 +183,28 @@ public final class ModelRouter: ObservableObject {
     }
 
     public func loadProviders() async {
+        await MainActor.run {
+            isLoadingProviders = true
+        }
+
         do {
             let descriptors = try await client.listProviders()
             await MainActor.run {
                 providers = descriptors
+                lastError = nil
+                isLoadingProviders = false
+            }
+        } catch let error as GatewayError {
+            await MainActor.run {
+                lastError = error
+                isLoadingProviders = false
             }
         } catch {
-            // Keep previous list if fetch fails; optionally log.
+            let gatewayError = GatewayError.message(error.localizedDescription)
+            await MainActor.run {
+                lastError = gatewayError
+                isLoadingProviders = false
+            }
         }
     }
 

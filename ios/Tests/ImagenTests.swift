@@ -43,7 +43,7 @@ private final class RecordingGatewayClient: GatewayClient {
 
     func fetchJob(id: String, provider: ModelProvider) async throws -> ProviderOutput {
         _ = (id, provider)
-        return ProviderOutput(previews: [], outputs: [], status: .queued)
+        return ProviderOutput(outputs: [], status: .queued, errorMessage: nil)
     }
 
     func listProviders() async throws -> [ProviderDescriptor] {
