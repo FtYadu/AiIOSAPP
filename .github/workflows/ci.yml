@@ -22,7 +22,25 @@ jobs:
       - name: Lint
         run: npm run lint
       - name: Test
-        run: npm test
+        run: npm test -- --watchAll=false
+      - name: Build
+        run: npm run build
+      - name: Package deployment artifacts
+        run: |
+          rm -rf artifacts
+          mkdir -p artifacts
+          tar -czf artifacts/gateway-dist.tar.gz dist package.json package-lock.json
+          if [ -d dist/workers ]; then
+            tar -czf artifacts/rabbit-worker-dist.tar.gz dist/workers package.json package-lock.json
+          else
+            echo "dist/workers not found" >&2
+            exit 1
+          fi
+      - name: Upload deployment bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloud-run-rabbitmq-bundles
+          path: artifacts/*.tar.gz
 
   ios:
     runs-on: macos-14
@@ -31,8 +49,16 @@ jobs:
         working-directory: ios
     steps:
       - uses: actions/checkout@v4
+      - name: Install swift-format
+        run: brew install swift-format
+      - name: Install SwiftLint
+        run: brew install swiftlint
       - name: Resolve Swift dependencies
         run: swift package resolve
+      - name: Swift format check
+        run: swift format --mode=lint --recursive .
+      - name: SwiftLint
+        run: swiftlint --strict
       - name: Build
         run: swift build
       - name: Test

@@ -2,6 +2,8 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+const rabbitQueue = process.env.RABBITMQ_QUEUE ?? 'my-tasks';
+
 export const runtimeConfig = {
   port: Number.parseInt(process.env.PORT ?? '8080', 10),
   logLevel: process.env.LOG_LEVEL ?? 'info',
@@ -17,5 +19,8 @@ export const runtimeConfig = {
   uploadsBucket: process.env.REIMAGINE_UPLOADS_BUCKET ?? 'reimagine-uploads',
   outputsBucket: process.env.REIMAGINE_OUTPUTS_BUCKET ?? 'reimagine-outputs',
   rabbitUrl: process.env.RABBITMQ_URL,
-  rabbitQueue: process.env.RABBITMQ_QUEUE ?? 'my-tasks'
+  rabbitQueue,
+  rabbitDeadLetterQueue: process.env.RABBITMQ_DLQ ?? `${rabbitQueue}.dlq`,
+  queueMaxRetries: Number.parseInt(process.env.QUEUE_MAX_RETRIES ?? '5', 10),
+  queueInitialBackoffMs: Number.parseInt(process.env.QUEUE_INITIAL_BACKOFF_MS ?? '500', 10)
 } as const;

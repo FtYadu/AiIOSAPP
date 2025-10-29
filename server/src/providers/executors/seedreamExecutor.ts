@@ -6,7 +6,7 @@ import { metrics } from '@lib/metrics';
 import { ProviderConfig } from '@lib/remoteConfig';
 import { ImageEditRequest, ImageEditResult } from '@providers/types';
 
-import { loadImageBuffer, requireEnv, computeSha256, toDataUrl } from './helpers';
+import { buildStubResult, loadImageBuffer, requireEnv, computeSha256, toDataUrl } from './helpers';
 import { downloadToBuffer } from '@util/http';
 import { storeOutputs, OutputBuffer } from '@util/storeOutputs';
 
@@ -26,6 +26,14 @@ export const handleSeedreamEdit = async (
   config: ProviderConfig
 ): Promise<ImageEditResult> => {
   metrics.record('provider.seedream.invoke', 1, { hasImage: String(Boolean(request.baseImage)) });
+
+  if (process.env.PROVIDER_STUBS === 'true') {
+    return buildStubResult('seedream', request, {
+      providerMeta: {
+        stub: true
+      }
+    });
+  }
 
   const apiKey = requireEnv('SEEDREAM_API_KEY');
   const endpoint = config.endpoint ?? process.env.SEEDREAM_ENDPOINT;

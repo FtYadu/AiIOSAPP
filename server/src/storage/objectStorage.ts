@@ -4,6 +4,7 @@ import { PutObjectCommand, getSignedUrl, s3Client } from '@storage/s3Client';
 import { runtimeConfig } from '@config/env';
 
 const { uploadsBucket, outputsBucket, s3Endpoint } = runtimeConfig;
+const isInMemoryS3 = (): boolean => process.env.USE_IN_MEMORY_S3 === 'true';
 
 const publicUrlFor = (bucket: string, key: string): string => {
   const endpoint = s3Endpoint?.replace(/\/+$/, '') ?? '';
@@ -23,6 +24,15 @@ export const createSignedUpload = async (
   contentType: string
 ): Promise<SignedUpload> => {
   const resolvedBucket = bucket === 'uploads' ? uploadsBucket : outputsBucket;
+  if (isInMemoryS3()) {
+    const publicUrl = publicUrlFor(resolvedBucket, key);
+    return {
+      uploadUrl: `${publicUrl}?inMemory=true`,
+      storagePath: `${resolvedBucket}/${key}`,
+      publicUrl,
+      contentType
+    };
+  }
   const command = new PutObjectCommand({
     Bucket: resolvedBucket,
     Key: key,
@@ -46,6 +56,9 @@ export const uploadBuffer = async (
   contentType: string
 ): Promise<string> => {
   const resolvedBucket = bucket === 'uploads' ? uploadsBucket : outputsBucket;
+  if (isInMemoryS3()) {
+    return `data:${contentType};base64,${buffer.toString('base64')}`;
+  }
   await s3Client.send(
     new PutObjectCommand({
       Bucket: resolvedBucket,

@@ -10,6 +10,7 @@ import { computeSha256 } from '@providers/executors/helpers';
 import { runtimeConfig } from '@config/env';
 import sharp from 'sharp';
 import { validate as uuidValidate } from 'uuid';
+import { createLogger } from '@lib/logger';
 
 const SIZE_MAP = {
   '1024x1024': { w: 1024, h: 1024 },
@@ -69,9 +70,19 @@ const uploadBase64Asset = async (
   const sanitized = base64.replace(/\s/g, '');
   const buffer = Buffer.from(sanitized, 'base64');
   const mime = format === 'jpeg' ? 'image/jpeg' : `image/${format}`;
+  const log = createLogger({ module: 'imageEdits.upload', kind, mime });
+  log.info({ bytes: buffer.length }, 'uploading base64 asset');
   const metadata = await sharp(buffer).metadata();
   const objectKey = generateObjectKey(undefined, format);
   const publicUrl = await uploadBuffer('uploads', objectKey, buffer, mime);
+  log.info(
+    {
+      url: publicUrl,
+      width: metadata.width ?? null,
+      height: metadata.height ?? null
+    },
+    'asset upload completed'
+  );
 
   return {
     url: publicUrl,
@@ -136,6 +147,10 @@ imageEditsRouter.post('/', async (req, res, next) => {
       pendingAssets.push(asset);
     }
 
+    if (maskImage) {
+      metrics.incrementMaskUpload(providerName);
+    }
+
     const size = parseSizeString(body.size);
 
     const job = await provider.enqueueEdit(
@@ -180,6 +195,10 @@ imageEditsRouter.post('/', async (req, res, next) => {
     });
   } catch (error) {
     metrics.record('routes.image_edits.error', 1);
+    if (process.env.JEST_WORKER_ID) {
+      // eslint-disable-next-line no-console
+      console.error('[imageEditsRouter] error', error);
+    }
     return next(error);
   }
 });

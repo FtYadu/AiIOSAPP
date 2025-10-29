@@ -6,7 +6,7 @@ import { metrics } from '@lib/metrics';
 import { ProviderConfig } from '@lib/remoteConfig';
 import { ImageEditRequest, ImageEditResult } from '@providers/types';
 
-import { computeSha256, loadImageBuffer, toDataUrl, requireEnv } from './helpers';
+import { buildStubResult, computeSha256, loadImageBuffer, toDataUrl, requireEnv } from './helpers';
 import { downloadToBuffer } from '@util/http';
 import { formatToMime, storeOutputs, OutputBuffer, ImageFormat } from '@util/storeOutputs';
 
@@ -52,6 +52,14 @@ export const handleOpenAIEdit = async (
   config: ProviderConfig
 ): Promise<ImageEditResult> => {
   metrics.record('provider.openai.invoke', 1, { mode: request.baseImage ? 'edit' : 'generate' });
+
+  if (process.env.PROVIDER_STUBS === 'true') {
+    return buildStubResult('openai', request, {
+      providerMeta: {
+        stub: true
+      }
+    });
+  }
 
   const apiKey = requireEnv('OPENAI_API_KEY');
   const baseUrl = config.endpoint || OPENAI_DEFAULT_BASE;

@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { db } from '@lib/db';
 import { validate as uuidValidate, v5 as uuidv5 } from 'uuid';
 
@@ -67,11 +69,13 @@ export const createJob = async (params: {
     params.provider
   ]);
 
+  const jobId = randomUUID();
   const result = await db.query<JobRow>(
-    `insert into image_jobs (user_id, provider, prompt, strength, guidance, seed, size, output_format, n, init_image_url, mask_url, metadata, webhook_url, idempotency_key, status)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'queued')
+    `insert into image_jobs (id, user_id, provider, prompt, strength, guidance, seed, size, output_format, n, init_image_url, mask_url, metadata, webhook_url, idempotency_key, status)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'queued')
      returning *`,
     [
+      jobId,
       normalizeUserId(params.userId),
       params.provider,
       params.prompt,
@@ -132,10 +136,12 @@ export const insertAsset = async (params: {
   height?: number | null;
   sha256?: string | null;
 }): Promise<void> => {
+  const id = randomUUID();
   await db.query(
-    `insert into image_assets (job_id, kind, storage_path, public_url, mime, width, height, sha256)
-     values ($1,$2,$3,$4,$5,$6,$7,$8)`,
+    `insert into image_assets (id, job_id, kind, storage_path, public_url, mime, width, height, sha256)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
     [
+      id,
       params.jobId,
       params.kind,
       params.storagePath,
