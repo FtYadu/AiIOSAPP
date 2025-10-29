@@ -5,6 +5,8 @@ import { metrics } from '@lib/metrics';
 import { appendArtifacts, updateJobStatus } from '@lib/jobRepository';
 import { executeProviderJob } from './providerWorker';
 import { QueuePayload } from '@lib/queueClient';
+import { ensureMaskFromBoxes } from '@util/maskSynthesis';
+import { dispatchJobWebhook } from '@lib/webhookDispatcher';
 
 export const startRabbitWorker = async (): Promise<void> => {
   if (!runtimeConfig.rabbitUrl) {
@@ -21,24 +23,44 @@ export const startRabbitWorker = async (): Promise<void> => {
       return;
     }
 
+    let payload: QueuePayload | null = null;
     try {
-      const payload = JSON.parse(msg.content.toString()) as QueuePayload;
+      payload = JSON.parse(msg.content.toString()) as QueuePayload;
+      const requestWithMask = await ensureMaskFromBoxes(payload.request);
 
       const result = await executeProviderJob(
         { provider: payload.provider, retries: 0, config: payload.config, jobId: payload.jobId },
-        payload.request
+        requestWithMask
       );
 
       await appendArtifacts(payload.jobId, result.artifacts ?? []);
       await updateJobStatus(payload.jobId, result.status);
+      if (result.status === 'succeeded' || result.status === 'failed') {
+        await dispatchJobWebhook({
+          jobId: payload.jobId,
+          status: result.status,
+          artifacts: result.artifacts ?? [],
+          error: null
+        });
+      }
       metrics.record('queue.job.success', 1, { provider: payload.provider, transport: 'rabbitmq' });
 
       channel.ack(msg);
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
       metrics.record('queue.job.failure', 1, {
-        provider: 'unknown',
+        provider: payload?.provider ?? 'unknown',
         transport: 'rabbitmq'
       });
+      if (payload) {
+        await updateJobStatus(payload.jobId, 'failed', message).catch(() => undefined);
+        await dispatchJobWebhook({
+          jobId: payload.jobId,
+          status: 'failed',
+          artifacts: [],
+          error: message
+        }).catch(() => undefined);
+      }
       channel.nack(msg, false, false);
     }
   });

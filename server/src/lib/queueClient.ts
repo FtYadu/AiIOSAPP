@@ -3,6 +3,8 @@ import { ProviderConfig } from '@lib/remoteConfig';
 import { executeProviderJob } from '@workers/providerWorker';
 import { ImageEditRequest } from '@providers/types';
 import { appendArtifacts, updateJobStatus } from '@lib/jobRepository';
+import { ensureMaskFromBoxes } from '@util/maskSynthesis';
+import { dispatchJobWebhook } from '@lib/webhookDispatcher';
 import amqp from 'amqplib';
 import { runtimeConfig } from '@config/env';
 
@@ -19,23 +21,43 @@ export interface QueueClient {
 
 class InMemoryQueueClient implements QueueClient {
   async enqueue(payload: QueuePayload): Promise<void> {
+    const requestWithMask = await ensureMaskFromBoxes(payload.request);
+    const enrichedPayload = { ...payload, request: requestWithMask };
+
     metrics.record('queue.enqueue', 1, { provider: payload.provider });
     const timer = setTimeout(async () => {
+      let jobError: string | null = null;
       try {
         const result = await executeProviderJob(
-          { provider: payload.provider, retries: 0, config: payload.config, jobId: payload.jobId },
-          payload.request
+          {
+            provider: enrichedPayload.provider,
+            retries: 0,
+            config: enrichedPayload.config,
+            jobId: enrichedPayload.jobId
+          },
+          enrichedPayload.request
         );
-        await appendArtifacts(payload.jobId, result.artifacts ?? []);
-        await updateJobStatus(payload.jobId, result.status);
-        metrics.record('queue.job.success', 1, { provider: payload.provider });
+        await appendArtifacts(enrichedPayload.jobId, result.artifacts ?? []);
+        await updateJobStatus(enrichedPayload.jobId, result.status);
+        if (result.status === 'succeeded' || result.status === 'failed') {
+          await dispatchJobWebhook({
+            jobId: enrichedPayload.jobId,
+            status: result.status,
+            artifacts: result.artifacts ?? [],
+            error: null
+          });
+        }
+        metrics.record('queue.job.success', 1, { provider: enrichedPayload.provider });
       } catch (error) {
-        metrics.record('queue.job.failure', 1, { provider: payload.provider });
-        await updateJobStatus(
-          payload.jobId,
-          'failed',
-          error instanceof Error ? error.message : 'Unknown error'
-        );
+        jobError = error instanceof Error ? error.message : 'Unknown error';
+        metrics.record('queue.job.failure', 1, { provider: enrichedPayload.provider });
+        await updateJobStatus(enrichedPayload.jobId, 'failed', jobError);
+        await dispatchJobWebhook({
+          jobId: enrichedPayload.jobId,
+          status: 'failed',
+          artifacts: [],
+          error: jobError
+        });
       }
     }, 10);
     timer.unref?.();
@@ -61,8 +83,14 @@ class RabbitQueueClient implements QueueClient {
   }
 
   async enqueue(payload: QueuePayload): Promise<void> {
+    const requestWithMask = await ensureMaskFromBoxes(payload.request);
     const channel = await this.getChannel();
-    const buffer = Buffer.from(JSON.stringify(payload));
+    const buffer = Buffer.from(
+      JSON.stringify({
+        ...payload,
+        request: requestWithMask
+      })
+    );
     channel.sendToQueue(runtimeConfig.rabbitQueue, buffer, { persistent: true });
     metrics.record('queue.enqueue', 1, { provider: payload.provider, transport: 'rabbitmq' });
   }

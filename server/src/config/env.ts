@@ -17,5 +17,6 @@ export const runtimeConfig = {
   uploadsBucket: process.env.REIMAGINE_UPLOADS_BUCKET ?? 'reimagine-uploads',
   outputsBucket: process.env.REIMAGINE_OUTPUTS_BUCKET ?? 'reimagine-outputs',
   rabbitUrl: process.env.RABBITMQ_URL,
-  rabbitQueue: process.env.RABBITMQ_QUEUE ?? 'my-tasks'
+  rabbitQueue: process.env.RABBITMQ_QUEUE ?? 'my-tasks',
+  webhookSigningSecret: process.env.WEBHOOK_SIGNING_SECRET ?? null
 } as const;

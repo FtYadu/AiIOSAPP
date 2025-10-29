@@ -122,6 +122,11 @@ export const findJobWithOutputs = async (
   };
 };
 
+export const findJobById = async (jobId: string): Promise<JobRow | null> => {
+  const result = await db.query<JobRow>(`select * from image_jobs where id=$1`, [jobId]);
+  return result.rows[0] ?? null;
+};
+
 export const insertAsset = async (params: {
   jobId: string;
   kind: 'init' | 'mask' | 'output';
@@ -179,4 +184,24 @@ export const appendArtifacts = async (
       sha256: artifact.sha256 ?? null
     });
   }
+};
+
+export const recordWebhookEvent = async (params: {
+  jobId: string;
+  targetUrl: string;
+  status?: number | null;
+  attempts?: number;
+  lastError?: string | null;
+}): Promise<void> => {
+  await db.query(
+    `insert into webhook_events (job_id, target_url, status, attempts, last_error)
+     values ($1,$2,$3,$4,$5)`,
+    [
+      params.jobId,
+      params.targetUrl,
+      params.status ?? null,
+      params.attempts ?? 1,
+      params.lastError ?? null
+    ]
+  );
 };

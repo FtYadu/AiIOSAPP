@@ -1,6 +1,7 @@
 import { ImageEditRequest, ImageEditResult } from '@providers/types';
 import { ProviderConfig } from '@lib/remoteConfig';
 import { resolveExecutor } from '@providers/executors/registry';
+import { ensureMaskFromBoxes } from '@util/maskSynthesis';
 
 export type WorkerContext = {
   provider: string;
@@ -14,7 +15,8 @@ export const executeProviderJob = async (
   request: ImageEditRequest
 ): Promise<ImageEditResult> => {
   const executor = resolveExecutor(context.provider);
-  const result = await executor(context.jobId, request, context.config);
+  const requestWithMask = await ensureMaskFromBoxes(request);
+  const result = await executor(context.jobId, requestWithMask, context.config);
   return {
     ...result,
     providerMeta: {
