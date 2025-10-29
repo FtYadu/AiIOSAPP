@@ -10,6 +10,7 @@ import { trendsRouter } from '@routes/trends';
 import { providersRouter } from '@routes/providers';
 import { runtimeConfig } from '@config/env';
 import { imageEditsRouter } from '@routes/imageEdits';
+import { uploadsRouter } from '@routes/uploads';
 
 export const createApp = () => {
   const app = express();
@@ -27,6 +28,7 @@ export const createApp = () => {
   app.use('/v1/jobs', jobsRouter);
   app.use('/v1/prompt', promptRouter);
   app.use('/v1/images/edits', imageEditsRouter);
+  app.use('/v1/uploads', uploadsRouter);
   app.use('/v1/assets', assetsRouter);
   app.use('/v1/trends', trendsRouter);
   app.use('/v1/providers', providersRouter);
