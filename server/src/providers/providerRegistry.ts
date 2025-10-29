@@ -32,6 +32,7 @@ export const listProviders = async (): Promise<string[]> => {
 };
 
 export const reloadProviders = async (): Promise<void> => {
+  remoteConfig.invalidateCache();
   registry.clear();
   initialized = false;
   await ensureInitialized();

@@ -11,7 +11,7 @@
 
 ## Secrets & Config
 - All provider keys stored in Google Secret Manager; injected at runtime via environment variables.
-- Remote config seeded from `provider_routes` table; use Terraform `infra/terraform/remote_config.tf` (to be created) to manage drift.
+- Remote config lives in the `provider_routes` table. Toggle providers or update endpoints via the Supabase dashboard (or migrations) instead of editing TypeScript defaults, then call `POST /v1/providers/reload` to fan out changes.
 
 ## Observability
 - Structured logs exported to Cloud Logging; metrics scraped by managed Prometheus. Errors forwarded to Sentry via OTLP sidecar.
