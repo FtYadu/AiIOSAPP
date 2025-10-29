@@ -30,10 +30,14 @@ jobsRouter.get('/:jobId', async (req, res) => {
     height: asset.height ?? undefined
   }));
 
+  const artifactUrls = artifacts.map((artifact) => artifact.url);
+
   return res.json({
     jobId: record.job.id,
     provider: record.job.provider,
     status: record.job.status,
+    previews: artifactUrls,
+    outputs: artifactUrls,
     artifacts,
     providerMeta: record.job.metadata ?? {},
     updatedAt: record.job.updated_at
