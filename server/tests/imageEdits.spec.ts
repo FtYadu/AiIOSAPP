@@ -18,7 +18,7 @@ describe('Reimagine Image Edit API', () => {
   it('creates an edit job with base64 upload fallback', async () => {
     const response = await request(app)
       .post('/v1/images/edits')
-      .set('x-user-id', '11111111-1111-1111-1111-111111111111')
+      .set('Authorization', 'Bearer token:user-1111')
       .send({
         prompt: 'Make it futuristic neon cityscape',
         init_image_b64: BASE64_PIXEL,
@@ -31,11 +31,12 @@ describe('Reimagine Image Edit API', () => {
 
     const job = await request(app)
       .get(`/v1/images/edits/${response.body.job_id}`)
-      .set('x-user-id', 'user-123')
+      .set('Authorization', 'Bearer token:user-1111')
       .expect(200);
 
     expect(job.body.status).toBeDefined();
     expect(Array.isArray(job.body.outputs)).toBe(true);
+    expect(Array.isArray(job.body.previews)).toBe(true);
   });
 
   it('returns 409 on idempotent replays', async () => {
@@ -43,7 +44,7 @@ describe('Reimagine Image Edit API', () => {
 
     const first = await request(app)
       .post('/v1/images/edits')
-      .set('x-user-id', '22222222-2222-2222-2222-222222222222')
+      .set('Authorization', 'Bearer token:user-2222')
       .send({
         prompt: 'Turn into grayscale',
         init_image_b64: BASE64_PIXEL,
@@ -53,7 +54,7 @@ describe('Reimagine Image Edit API', () => {
 
     await request(app)
       .post('/v1/images/edits')
-      .set('x-user-id', '22222222-2222-2222-2222-222222222222')
+      .set('Authorization', 'Bearer token:user-2222')
       .send({
         prompt: 'Turn into grayscale',
         init_image_b64: BASE64_PIXEL,
@@ -63,5 +64,13 @@ describe('Reimagine Image Edit API', () => {
       .expect((res) => {
         expect(res.body.job_id).toEqual(first.body.job_id);
       });
+  });
+
+  it('enforces authentication', async () => {
+    await request(app).post('/v1/images/edits').send({ prompt: 'hi' }).expect(401);
+
+    await request(app)
+      .get('/v1/images/edits/00000000-0000-0000-0000-000000000000')
+      .expect(401);
   });
 });

@@ -1,10 +1,15 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 
-import { authUserId } from '@lib/auth';
+import { authenticatedUser, requireAuth } from '@lib/auth';
 import { metrics } from '@lib/metrics';
 import { getProvider } from '@providers/providerRegistry';
-import { findJobByIdempotency, findJobWithOutputs, insertAsset } from '@lib/jobRepository';
+import {
+  findJobByIdempotency,
+  findJobWithOutputs,
+  insertAsset,
+  normalizeUserId
+} from '@lib/jobRepository';
 import { generateObjectKey, uploadBuffer } from '@storage/objectStorage';
 import { computeSha256 } from '@providers/executors/helpers';
 import { runtimeConfig } from '@config/env';
@@ -89,9 +94,11 @@ const uploadBase64Asset = async (
 
 export const imageEditsRouter = Router();
 
+imageEditsRouter.use(requireAuth);
+
 imageEditsRouter.post('/', async (req, res, next) => {
   try {
-    const userId = authUserId(req);
+    const userId = authenticatedUser(req)?.userId;
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -185,11 +192,19 @@ imageEditsRouter.post('/', async (req, res, next) => {
 });
 
 imageEditsRouter.get('/:jobId', async (req, res) => {
+  const userId = authenticatedUser(req)?.userId;
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
   if (!uuidValidate(req.params.jobId)) {
     return res.status(404).json({ error: 'Job not found' });
   }
   const record = await findJobWithOutputs(req.params.jobId);
   if (!record) {
+    return res.status(404).json({ error: 'Job not found' });
+  }
+
+  if (normalizeUserId(userId) !== record.job.user_id) {
     return res.status(404).json({ error: 'Job not found' });
   }
 
@@ -201,12 +216,16 @@ imageEditsRouter.get('/:jobId', async (req, res) => {
     height: asset.height ?? null
   }));
 
+  const urls = record.outputs.map((asset) => asset.public_url ?? asset.storage_path);
+
   return res.json({
     job_id: record.job.id,
     status: record.job.status,
     created_at: record.job.created_at,
     updated_at: record.job.updated_at,
     error: record.job.error,
-    outputs
+    outputs,
+    previews: urls,
+    outputs_urls: urls
   });
 });
